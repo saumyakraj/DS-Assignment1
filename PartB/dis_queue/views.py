@@ -1,6 +1,8 @@
 #ISSUES:
 #1. ConsumerConsume works one by one
 #2. 1Producer is managing multiple topics
+#3. How to print producer id
+#4. Not tested Consumer Consume and Size because of error in Consumer Consume
 
 from django.shortcuts import render
 from rest_framework import generics, serializers, status, views, permissions
@@ -112,7 +114,7 @@ class ProducerRegister(views.APIView):
 
             producer = Producer(topic_id=topic)
             producer.save()
-            return Response(data={"status": "success", "producer_id": str(Producer(producer)).id}, status=status.HTTP_200_OK)
+            return Response(data={"status": "success", "producer_id": str(producer.id)}, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response(data={"status": "failure", "message": "error while querying/commiting database", "e": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -155,30 +157,35 @@ class ProducerProduce(views.APIView):
         if content_type != 'application/json':
             return Response(data={"status": "failure", "message": "Content-Type not supported"}, status=status.HTTP_400_BAD_REQUEST)
         
-        topic = None
+        topic_name = None
         producer_id = None
         message = None
+        prod_client = None
+
         try:
             receive = request.data
-            topic = receive['topic']
+            topic_name = receive['topic']
             producer_id = receive['producer_id']
-            message = receive['message']
+            message_content = receive['message']
+            prod_client = receive['prod_client']
+
         except:
             return Response(data={"status": "failure", "message": "error while parsing request"}, status=status.HTTP_400_BAD_REQUEST)
         
-        global producers
-        if producer_id not in producers.topics:
-            return Response(data={"status": "failure", "message": "producer_id does not exist"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        if producers.topics[producer_id] != topic:
-            return Response(data={"status": "failure", "message": "topic does not match for given producer_id"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            producer = Producer.objects.filter(id=producer_id).first()
+            if producer is None:
+                return Response(data={"status": "failure", "message": "producer_id does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if producer.topic_id.name != topic_name:
+                return Response(data={"status": "failure", "message": "topic does not match for given producer_id"}, status=status.HTTP_400_BAD_REQUEST)
+                    
+            message = Message(topic_id=producer.topic_id, message_content=message_content, producer_client=prod_client)
+            message.save()
+            return Response(data={"status": "success"}, status=status.HTTP_200_OK)
 
-        
-        # lock queue for requested topic
-        with queues[topic].lock:
-            queues[topic].messages.append(message)
-        
-        return Response(data={"status": "success"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(data={"status": "failure", "message": "error while querying/commiting database", "e": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
 
 class ConsumerConsume(views.APIView):
@@ -186,58 +193,65 @@ class ConsumerConsume(views.APIView):
     def get(self, request):
         print_thread_id()   
         try:
-            topic = request.data['topic']
+            topic_name = request.data['topic']
             consumer_id = request.data['consumer_id']
             consumer_id = int(consumer_id)
-        except Exception as e:
+        except:
             return Response(data={"status": "failure", "message": "Error While Parsing json"}, status=status.HTTP_400_BAD_REQUEST)
 
-            
-        global consumers
-        if consumer_id not in consumers.topics:
-            return Response(data={"status": "failure", "message": "consumer_id does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            consumer = Consumer.objects.filter(id=consumer_id).first()
+            if consumer_id is None:
+                return Response(data={"status": "failure", "message": "consumer_id does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+    
+            if consumer.topic_id.name != topic_name:
+                return Response(data={"status": "failure", "message": "topic does not match for given consumer_id"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if consumers.topics[consumer_id] != topic:
-            return Response(data={"status": "failure", "message": "topic does not match for given consumer_id"}, status=status.HTTP_400_BAD_REQUEST)
-
-        
-        # retreive message
-        message = None
-        with consumers.offsets[consumer_id][1]:
-            try:
-                message = queues[topic].messages[consumers.offsets[consumer_id][0]]
-                consumers.offsets[consumer_id][0] += 1
-            except:
-                return Response(data={"status": "failure", "message": "no more logs"}, status=status.HTTP_400_BAD_REQUEST)
+            # the tuff query
+            message = Message.objects.filter(Message.id > consumer.offset).filter(topic_id=consumer.topic_id.id).order_by(Message.id.asc()).first()
+            if message is None:
+                return Response(data={"status": "failure", "message": "no more messages"}, status=status.HTTP_400_BAD_REQUEST)
+    
             
-        return Response(data={"status": "success", "message": message}, status=status.HTTP_200_OK)
-        
+            consumer.offset = message.id
+            db_lock = threading.Lock()
+            with db_lock:
+                consumer.save()
+                message.save()
+                # db.session.commit()
+            
+            with db_lock:
+                return Response(data={"status": "success", "message": message.message_content, "offset": message.id}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(data={"status": "failure", "message": "error while querying/commiting database", "e": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+ 
 
 class Size(views.APIView):
 
     def get(self, request):
         print_thread_id()   
         try:
-            topic = request.data['topic']
+            topic_name = request.data['topic']
             consumer_id = request.data['consumer_id']
             consumer_id = int(consumer_id)
         except:
             return Response(data={"status": "failure", "message": "error while parsing request"}, status=status.HTTP_400_BAD_REQUEST)
 
-            
-        global consumers
-        if consumer_id not in consumers.topics:
-            return Response(data={"status": "failure", "message": "consumer_id does not exist"}, status=status.HTTP_400_BAD_REQUEST)
-
-        if consumers.topics[consumer_id] != topic:
-            return Response(data={"status": "failure", "message": "topic does not match for given consumer_id"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        
-        messages_left = 0
         try:
-            messages_left = len(queues[topic].messages) - consumers.offsets[consumer_id][0]
+            consumer = Consumer.query.filter_by(id=consumer_id).first()
+            if consumer_id is None:
+                return Response(data={"status": "failure", "message": "consumer_id does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if consumer.topic.name != topic_name:
+                return Response(data={"status": "failure", "message": "topic does not match for given consumer_id"}, status=status.HTTP_400_BAD_REQUEST)
+    
+            # the tuff query
+            messages = Message.query.filter(Message.id > consumer.offset).filter_by(topic_id=consumer.topic.id).count()
+            return Response(data={"status": "success", "size": messages}, status=status.HTTP_200_OK)
+
         except:
-            return Response(data={"status": "failure", "message": "an error occured"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(data={"status": "failure", "message": "Error while querying/commiting database"}, status=status.HTTP_400_BAD_REQUEST)
 
 
-        return Response(data={"status": "success", "size": messages_left}, status=status.HTTP_200_OK)

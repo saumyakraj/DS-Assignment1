@@ -1,0 +1,9 @@
+producer/produce:
+{
+"topic": "example_topic_3",
+"producer_id": "1",
+"message": "aaaa",
+"prod_client": "xyz"
+}
+
+consumer/consume:
