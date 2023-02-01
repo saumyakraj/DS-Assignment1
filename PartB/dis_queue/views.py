@@ -1,6 +1,6 @@
 #ISSUES:
 #1. ConsumerConsume works one by one
-
+#2. 1Producer is managing multiple topics
 
 from django.shortcuts import render
 from rest_framework import generics, serializers, status, views, permissions
@@ -9,6 +9,7 @@ from rest_framework.response import Response
 import threading
 from threading import Lock
 import traceback
+from .models import Topic, Producer, Consumer, Message
 
 # queue data structures
 
@@ -52,39 +53,37 @@ class Topics(views.APIView):
         print_thread_id()
         content_type = request.headers.get('Content-Type')
         if content_type != 'application/json':
-            return Response(data={"status": "failure", "message": "Content-Type not supported"}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(data={"status": "failure", "message": "Content-Type not supported"}, status=status.HTTP_400_BAD_REQUEST)
         
         topic_name = None
         try:
-            # print ("25")
             receive = request.data
             topic_name = receive['topic_name']
         except:
-            return Response(data={"status": "failure", "message": "Error While Parsing json"}, status=status.HTTP_401_UNAUTHORIZED)        
+            return Response(data={"status": "failure", "message": "Error While Parsing json"}, status=status.HTTP_400_BAD_REQUEST)        
                 
-        # lock the queues, we don't want to return the wrong status
-        # amd perform an unecessary insert
-        global queues
-        global queues_lock
-        with queues_lock:
-            if topic_name not in queues:
-                queues[topic_name] = TopicQueue(topic_name)
-                return Response(data={"status": "success", "message": 'topic ' + topic_name + ' created sucessfully'}, status=status.HTTP_200_OK)
-            else: 
-                return Response(data={"status": "failure", "message": "Topic already exists"}, status=status.HTTP_401_UNAUTHORIZED)
-    
-        # this is not dead code, this can return if there's an exception in queues_lock
-        return Response(data={"status": "failure", "message": "Error while aquiring queue lock"}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            if Topic.objects.filter(name=topic_name).first() is not None:
+                return Response(data={"status": "failure", "message": "Topic already exists"}, status=status.HTTP_400_BAD_REQUEST)        
+            topic = Topic(name=topic_name)
+            topic.save()
+
+        except:
+            return Response(data={"status": "failure", "message": "Error while querying/comitting to database"}, status=status.HTTP_400_BAD_REQUEST)        
+
+        
+        return Response(data={"status": "success", "message": 'topic ' + topic.name + ' created sucessfully'}, status=status.HTTP_200_OK)
+
+
 
     def get(self, request):
         print_thread_id()
-        topics = []
+        topics_name = []
         try:
-            global queues  
-            # no need to lock queues, topics can't be deleted
-            for key in queues:
-                topics.append(key)
-            return Response(data={"status": "success", "message": topics}, status=status.HTTP_200_OK)
+            topics = Topic.objects.all()
+            for t in topics:
+                topics_name.append(t.name)
+            return Response(data={"status": "success", "message": topics_name}, status=status.HTTP_200_OK)
 
         except: 
             return Response(data={"status": "failure", "message": "Error while listing topics"}, status=status.HTTP_400_BAD_REQUEST)
@@ -100,26 +99,25 @@ class ProducerRegister(views.APIView):
         topic = None
         try:
             receive = request.data
-            topic = receive['topic']
+            topic_name = receive['topic']
         except:
             return Response(data={"status": "failure", "message": "error while parsing request"}, status=status.HTTP_400_BAD_REQUEST)
 
             # topic can't be deleted, no need to lock queues
-        if topic not in queues:
-            return Response(data={"status": "failure", "message": "Topic not found"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        global producers
-        new_id = -1
-        with producers.lock:
-            new_id = producers.count
-            producers.count += 1
-            producers.topics[new_id] = topic
-        
-        if new_id == -1:
-            return Response(data={"status": "failure", "message": "Can not assign new id"}, status=status.HTTP_400_BAD_REQUEST)
-            
-        return Response(data={"status": "success", "producer_id": new_id}, status=status.HTTP_200_OK)
-    
+        # query
+        try:
+            topic = Topic.objects.filter(name=topic_name).first()
+            if topic is None:
+                return Response(data={"status": "failure", "message": "Topic does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+
+            producer = Producer(topic_id=topic)
+            producer.save()
+            return Response(data={"status": "success", "producer_id": str(Producer(producer)).id}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(data={"status": "failure", "message": "error while querying/commiting database", "e": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
 class ConsumerRegister(views.APIView):
 
     def post(self, request):
@@ -131,23 +129,22 @@ class ConsumerRegister(views.APIView):
         topic = None
         try:
             receive = request.data
-            topic = receive['topic']
+            topic_name = receive['topic']
         except:
             return Response(data={"status": "failure", "message": "error while parsing request"}, status=status.HTTP_400_BAD_REQUEST)
 
-        global consumers
-        new_id = -1
-        with consumers.lock:
-            new_id = consumers.count
-            consumers.count += 1
-            consumers.topics[new_id] = topic
-            # maintain a seperate lock for each consumer offset
-            consumers.offsets[new_id] = [0, Lock()]
-        
-        if new_id == -1:
-            return Response(data={"status": "failure", "message": "Can not assign new id"}, status=status.HTTP_400_BAD_REQUEST)
+        # query
+        try:
+            topic = Topic.objects.filter(name=topic_name).first()
+            if topic is None:
+                return Response(data={"status": "failure", "message": "Topic does not exist"}, status=status.HTTP_400_BAD_REQUEST)
 
-        return Response(data={"status": "success", "consumer_id": new_id}, status=status.HTTP_200_OK)
+            consumer = Consumer(topic_id=topic, offset=-1)
+            consumer.save()
+            return Response(data={"status": "success", "consumer_id": "consumer.id"}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(data={"status": "failure", "message": "Error while querying/commiting database", "e": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ProducerProduce(views.APIView):
