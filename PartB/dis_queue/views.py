@@ -208,7 +208,16 @@ class ConsumerConsume(views.APIView):
                 return Response(data={"status": "failure", "message": "topic does not match for given consumer_id"}, status=status.HTTP_400_BAD_REQUEST)
 
             # the tuff query
-            message = Message.objects.filter(Message.id > consumer.offset).filter(topic_id=consumer.topic_id.id).order_by(Message.id.asc()).first()
+            message = Message.objects.all()
+            message_list = []
+            for i in message:
+                if(i.topic_id.id == consumer.topic_id.id and i.id > consumer.offset):
+                    message_list.append(i)
+
+            message_list.sort()
+            message = message_list[0]
+
+                    
             if message is None:
                 return Response(data={"status": "failure", "message": "no more messages"}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -218,7 +227,6 @@ class ConsumerConsume(views.APIView):
             with db_lock:
                 consumer.save()
                 message.save()
-                # db.session.commit()
             
             with db_lock:
                 return Response(data={"status": "success", "message": message.message_content, "offset": message.id}, status=status.HTTP_200_OK)
@@ -240,18 +248,25 @@ class Size(views.APIView):
             return Response(data={"status": "failure", "message": "error while parsing request"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            consumer = Consumer.query.filter_by(id=consumer_id).first()
+            consumer = Consumer.objects.filter(id=consumer_id).first()
             if consumer_id is None:
                 return Response(data={"status": "failure", "message": "consumer_id does not exist"}, status=status.HTTP_400_BAD_REQUEST)
 
-            if consumer.topic.name != topic_name:
+            if consumer.topic_id.name != topic_name:
                 return Response(data={"status": "failure", "message": "topic does not match for given consumer_id"}, status=status.HTTP_400_BAD_REQUEST)
     
             # the tuff query
-            messages = Message.query.filter(Message.id > consumer.offset).filter_by(topic_id=consumer.topic.id).count()
-            return Response(data={"status": "success", "size": messages}, status=status.HTTP_200_OK)
+            # messages = Message.objects.filter(Message.id > consumer.offset).filter(topic_id=consumer.topic.id).count()
+            message = Message.objects.all()
+            message_list = []
+            for i in message:
+                if(i.topic_id.id == consumer.topic_id.id and i.id > consumer.offset):
+                    message_list.append(i)
 
-        except:
-            return Response(data={"status": "failure", "message": "Error while querying/commiting database"}, status=status.HTTP_400_BAD_REQUEST)
+            message = len(message_list)
+            return Response(data={"status": "success", "size": message}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(data={"status": "failure", "message": "Error while querying/commiting database", "err": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
