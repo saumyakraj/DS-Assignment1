@@ -144,9 +144,13 @@ class ConsumerRegister(views.APIView):
                 return Response(data={"status": "failure", "message": "Topic does not exist"}, status=status.HTTP_400_BAD_REQUEST)
 
             consumer = Consumer(topic_id=topic, offset=-1)
+
             consumer.save()
-            cons_id = Producer.objects.all()
-            cons_id = cons_id.size()
+
+            cons_id = Consumer.objects.all()
+
+            cons_id = len(cons_id)
+
             return Response(data={"status": "success", "consumer_id": cons_id}, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -201,15 +205,15 @@ class ConsumerConsume(views.APIView):
             consumer_id = request.data['consumer_id']
             consumer_id = int(consumer_id)
         except:
-            return Response(data={"status": "failure", "message": "Error While Parsing json"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(data={"status": "failure", "message": "Error While Parsing json"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
         try:
             consumer = Consumer.objects.filter(id=consumer_id).first()
             if consumer_id is None:
-                return Response(data={"status": "failure", "message": "consumer_id does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(data={"status": "failure", "message": "consumer_id does not exist"}, status=status.HTTP_401_UNAUTHORIZED)
     
             if consumer.topic_id.name != topic_name:
-                return Response(data={"status": "failure", "message": "topic does not match for given consumer_id"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(data={"status": "failure", "message": "topic does not match for given consumer_id"}, status=status.HTTP_402_PAYMENT_REQUIRED)
 
             # the tuff query
             message = Message.objects.all()
@@ -218,25 +222,22 @@ class ConsumerConsume(views.APIView):
                 if(i.topic_id.id == consumer.topic_id.id and i.id > consumer.offset):
                     message_list.append(i)
 
-            message_list.sort()
             message = message_list[0]
 
-                    
             if message is None:
-                return Response(data={"status": "failure", "message": "no more messages"}, status=status.HTTP_400_BAD_REQUEST)
-    
+                return Response(data={"status": "success", "message": "no more messages"}, status=status.HTTP_200_OK)
             
             consumer.offset = message.id
             db_lock = threading.Lock()
+
             with db_lock:
                 consumer.save()
-                message.save()
             
             with db_lock:
                 return Response(data={"status": "success", "message": message.message_content, "offset": message.id}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response(data={"status": "failure", "message": "error while querying/commiting database", "e": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(data={"status": "failure", "message": "error while querying/commiting database", "e": str(e)}, status=status.HTTP_403_FORBIDDEN)
 
  
 

@@ -19,4 +19,4 @@ for t in topics:
     consumer.register(t)
 
 print(consumer.name, 'starting...')
-consumer.run(30, 0.01, 5,'tests/log/')
+consumer.run(15, 0.01, 5,'log/')

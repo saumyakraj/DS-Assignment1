@@ -21,6 +21,7 @@ class Consumer:
             return -1
         try:
             res = requests.post(self.hostname + 'consumer/register/', json={"topic":topic})
+            
             if res.ok:
                 try:
                     response = res.json()
@@ -42,7 +43,8 @@ class Consumer:
         
         cons_id = self.ids[topic]
         try:
-            res = requests.get(self.hostname + 'consumer/consume/', params={"consumer_id": cons_id, "topic": topic})
+            res = requests.get(self.hostname + 'consumer/consume/', json={"topic": topic, "consumer_id": str(cons_id)})
+
             if res.ok:
                 try:
                     response = res.json()
@@ -64,7 +66,7 @@ class Consumer:
         
         cons_id = self.ids[topic]
         try:
-            res = requests.get(self.hostname + 'consumer/consume/', params={"consumer_id": cons_id, "topic": topic})
+            res = requests.get(self.hostname + 'consumer/consume/', json={"consumer_id": cons_id, "topic": topic})
             if res.ok:
                 try:
                     response = res.json()
@@ -105,7 +107,7 @@ class Consumer:
             else:
                 self.last_message_time = time.time()
                 if type(message) == type(True):
-                    print('fucked up', message)
+                    print('issue', message)
                 else: consume_log.write(message + '\n')
                 good_offset = offset
                 time.sleep(poll_time)
@@ -134,9 +136,9 @@ class Consumer:
     def run(self, timeout: float, poll_time=0.5, poll_after_error=5, log_folder=None):
         topic_threads = []
         files = []
-
         self.last_message_time = time.time()
         for t in self.ids:
+
             file = sys.stdout
             if log_folder is not None:
                 file = open(log_folder + self.name + '_' + t + '.txt', 'w')

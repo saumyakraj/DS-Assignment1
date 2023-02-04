@@ -19,4 +19,4 @@ for t in topics:
     consumer.register(t)
 
 print(consumer.name, 'starting...')
-consumer.run_recoverable(30, 0.1, 5,'tests/log/')
+consumer.run_recoverable(30, 0.1, 5,'log/')

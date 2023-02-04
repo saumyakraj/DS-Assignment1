@@ -23,7 +23,7 @@ for t in topics:
     producer.register(t)
 
 # file for logging productions (helpful in verification)
-file = open('tests/log/' + producer.name + '.txt', 'w')
+file = open('log/' + producer.name + '.txt', 'w')
 
 
 print(producer.name, 'Starting...')
