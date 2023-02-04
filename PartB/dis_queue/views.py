@@ -1,7 +1,7 @@
 #ISSUES:
 #1. ConsumerConsume works one by one
 #2. 1Producer is managing multiple topics
-#3. How to print producer id
+#3. How to print producer id, consumer id   
 #4. Not tested Consumer Consume and Size because of error in Consumer Consume
 
 from django.shortcuts import render
@@ -114,7 +114,9 @@ class ProducerRegister(views.APIView):
 
             producer = Producer(topic_id=topic)
             producer.save()
-            return Response(data={"status": "success", "producer_id": str(producer.id)}, status=status.HTTP_200_OK)
+            prod_id = Producer.objects.all()
+            prod_id = len(prod_id)
+            return Response(data={"status": "success", "producer_id": prod_id}, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response(data={"status": "failure", "message": "error while querying/commiting database", "e": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -143,7 +145,9 @@ class ConsumerRegister(views.APIView):
 
             consumer = Consumer(topic_id=topic, offset=-1)
             consumer.save()
-            return Response(data={"status": "success", "consumer_id": "consumer.id"}, status=status.HTTP_200_OK)
+            cons_id = Producer.objects.all()
+            cons_id = cons_id.size()
+            return Response(data={"status": "success", "consumer_id": cons_id}, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response(data={"status": "failure", "message": "Error while querying/commiting database", "e": str(e)}, status=status.HTTP_400_BAD_REQUEST)

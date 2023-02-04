@@ -24,6 +24,8 @@ class Producer:
                     response = res.json()
                     if response['status'] == 'success':
                         self.ids[topic] = response['producer_id']
+                        # print(response['producer_id'])
+                        # print(res)
                     else: self.erint(response)
                 except :
                     self.eprint('Invalid Response:', res.text)
@@ -40,9 +42,17 @@ class Producer:
             return False
         
         prod_id = self.ids[topic]
+        # print(topic)
+        # print(prod_id)
+        # print(self)
+        # print(self.ids)
         
         try:
-            res = requests.post(self.hostname + 'producer/produce/', json={"producer_id": prod_id, "topic": topic,"message": message})
+            res = requests.post(self.hostname + 'producer/produce/', json={"producer_id": prod_id, "topic": topic,"message": message, "prod_client": "xxy"})
+            # print(res)
+            # print(self.hostname + 'producer/produce/')
+            json2={"producer_id": prod_id, "topic": topic,"message": message, "prod_client": "xxy"}
+            # print(json2)
             if res.ok:
                 try:
                     response = res.json()
