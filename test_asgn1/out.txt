@@ -1,1 +1,0 @@
-{"status":"success","message":[]}{"status":"success","message":"topic Kagenou created sucessfully"}{"status":"failure","message":"Topic already exists"}{"status":"success","message":"topic Minoru created sucessfully"}{"status":"success","message":["Kagenou","Minoru"]}{"status":"success","producer_id":0}{"status":"success","consumer_id":0}
