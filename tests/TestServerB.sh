@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # clear database 
-psql --username=user1 --dbname=database1 < DatabaseManage/clear_database.sql
+psql --username=user1 --dbname=database1 < DatabaseManage/EmptyDatabase1.sql
 
 # creating required topics fot testing
 curl -XPOST "http://localhost:5000/topics" -d '{"topic_name": "T-1"}' -H "Content-Type: application/json"

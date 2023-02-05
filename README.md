@@ -24,7 +24,7 @@ pip install -r requirements.txt
 ### Setting up database
 ```bash
 sudo systemctl start postgresql
-sudo -iu postgres psql < DatabaseManage/create_database.sql
+sudo -iu postgres psql < DatabaseManage/StartPostgresDatabase.sql
 ```
 
 ## Testing
